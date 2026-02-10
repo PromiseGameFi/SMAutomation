@@ -1,0 +1,17 @@
+node_modules
+.env
+coverage
+coverage.json
+execute.md
+README-DEMO.md
+zk.md
+typechain
+typechain-types
+artifacts
+cache
+dist
+.DS_Store
+.idea
+.vscode
+hardhat.config.js.bak
+ContractDetails.json
