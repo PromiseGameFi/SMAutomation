@@ -2,16 +2,17 @@ import solc from 'solc';
 import fs from 'fs';
 import path from 'path';
 
-const contractPath = path.resolve('contracts', 'ReactiveExecutor.sol');
-const source = fs.readFileSync(contractPath, 'utf8');
+const contracts = ['ReactiveExecutor.sol', 'TestToken.sol'];
+const sources = {};
+
+contracts.forEach(file => {
+    const contractPath = path.resolve('contracts', file);
+    sources[file] = { content: fs.readFileSync(contractPath, 'utf8') };
+});
 
 const input = {
     language: 'Solidity',
-    sources: {
-        'ReactiveExecutor.sol': {
-            content: source,
-        },
-    },
+    sources: sources,
     settings: {
         outputSelection: {
             '*': {
@@ -21,7 +22,7 @@ const input = {
     },
 };
 
-console.log('Compiling ReactiveExecutor.sol...');
+console.log('Compiling contracts...');
 const output = JSON.parse(solc.compile(JSON.stringify(input)));
 
 if (output.errors) {
@@ -31,15 +32,19 @@ if (output.errors) {
     if (output.errors.some(x => x.severity === 'error')) process.exit(1);
 }
 
-const contract = output.contracts['ReactiveExecutor.sol']['ReactiveExecutor'];
-const artifact = {
-    abi: contract.abi,
-    bytecode: contract.evm.bytecode.object,
-};
-
 if (!fs.existsSync('artifacts')) fs.mkdirSync('artifacts');
-fs.writeFileSync(
-    path.resolve('artifacts', 'ReactiveExecutor.json'),
-    JSON.stringify(artifact, null, 2)
-);
-console.log('Compilation successful! Artifact saved to artifacts/ReactiveExecutor.json');
+
+for (const file of contracts) {
+    const contractName = file.replace('.sol', '');
+    const contract = output.contracts[file][contractName];
+    const artifact = {
+        abi: contract.abi,
+        bytecode: contract.evm.bytecode.object,
+    };
+    fs.writeFileSync(
+        path.resolve('artifacts', `${contractName}.json`),
+        JSON.stringify(artifact, null, 2)
+    );
+    console.log(`Artifact saved: artifacts/${contractName}.json`);
+}
+console.log('Compilation successful!');

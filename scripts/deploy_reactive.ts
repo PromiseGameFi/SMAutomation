@@ -38,74 +38,57 @@ async function main() {
 
     console.log(`🚀 Deploying from: ${account.address}`);
 
-    // Load Artifact
-    const artifactPath = path.resolve('artifacts', 'ReactiveExecutor.json');
-    const artifact = JSON.parse(fs.readFileSync(artifactPath, 'utf8'));
+    // Load Artifacts
+    const executorArtifact = JSON.parse(fs.readFileSync(path.resolve('artifacts', 'ReactiveExecutor.json'), 'utf8'));
+    const tokenArtifact = JSON.parse(fs.readFileSync(path.resolve('artifacts', 'TestToken.json'), 'utf8'));
 
-    // Deploy ReactiveExecutor
-    // We pass SMART_EXECUTOR_ADDRESS to constructor.
-    // Assuming generic address or previous one: 0x7B4337a12f60D185DdCc693FD961e0DDF61bE917
+    // 1. Deploy TestToken
+    console.log("Deploying TestToken...");
+    const tokenHash = await client.deployContract({
+        abi: tokenArtifact.abi,
+        bytecode: tokenArtifact.bytecode,
+    });
+    const tokenReceipt = await publicClient.waitForTransactionReceipt({ hash: tokenHash });
+    const tokenAddress = tokenReceipt.contractAddress!;
+    console.log(`✅ TestToken: ${tokenAddress}`);
+
+    // 2. Deploy ReactiveExecutor
     const SMART_EXECUTOR = "0x7B4337a12f60D185DdCc693FD961e0DDF61bE917";
-
     console.log("Deploying ReactiveExecutor...");
-    const hash = await client.deployContract({
-        abi: artifact.abi,
-        bytecode: artifact.bytecode,
+    const executorHash = await client.deployContract({
+        abi: executorArtifact.abi,
+        bytecode: executorArtifact.bytecode,
         args: [SMART_EXECUTOR]
     });
+    const executorReceipt = await publicClient.waitForTransactionReceipt({ hash: executorHash });
+    const executorAddress = executorReceipt.contractAddress!;
+    console.log(`✅ ReactiveExecutor: ${executorAddress}`);
 
-    console.log(`⏳ Deployment Tx: ${hash}`);
-    const receipt = await publicClient.waitForTransactionReceipt({ hash });
-    const contractAddress = receipt.contractAddress;
-    console.log(`✅ ReactiveExecutor deployed at: ${contractAddress}`);
+    // Save Addresses
+    fs.writeFileSync('deployed_addresses.json', JSON.stringify({
+        TestToken: tokenAddress,
+        ReactiveExecutor: executorAddress
+    }, null, 2));
 
-    if (!contractAddress) return;
-
-    // --- REGISTER SUBSCRIPTION ---
-    console.log("🔌 Registering On-Chain Subscription...");
-
+    // 3. Register Subscription
+    console.log("🔌 Registering Subscription...");
     const sdk = new SDK({ public: publicClient, wallet: client });
 
-    // We subscribe to Transfer events. 
-    // For demo, we filter by a specific dummy emitter or just standard Transfer topic.
     // Topic0: keccak256("Transfer(address,address,uint256)")
-    // 0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef
-
     const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
-
-    // We listen to Transfers from "Wrapped STT" or similar. 
-    // If we don't specify emitter, it might be expensive or rejected? 
-    // Somnia docs say "Customizable for filters".
-    // Let's try to just listen to *all* transfers (wildcard) which is bold, but let's see.
-    // Actually, let's limit to the SMART_EXECUTOR just so we don't get flooded, 
-    // even though it doesn't emit Transfer.
-    // Better: Deploy a dummy token? 
-    // For now, let's just listen to the contract itself?
-    // Let's listen to ANY Transfer (undefined emitter).
 
     try {
         const subHash = await sdk.createSoliditySubscription({
             eventTopics: [TRANSFER_TOPIC],
-            handlerContractAddress: contractAddress,
-            // handlerFunctionSelector: '0x...', // Defaults to Somnia's standard if omitted
-            // We implemented `react(...)` but let's see if we can generate selector for it
-            // "react(bytes32[],bytes,bytes[])" -> keccak("...")
-            // Actually, let's rely on standard. If strict, we might need selector.
-            // But let's assume default first.
-
+            emitter: tokenAddress, // Strictly listen to our token
+            handlerContractAddress: executorAddress,
             priorityFeePerGas: 0n,
-            maxFeePerGas: 1000000000n, // 1 gwei
+            maxFeePerGas: 1000000000n,
             gasLimit: 500000n,
             isGuaranteed: false,
             isCoalesced: false
         });
-
         console.log(`✅ Subscription Tx: ${subHash}`);
-        console.log(`\n🎉 SETUP COMPLETE!`);
-        console.log(`1. Your contract ${contractAddress} is now listening to ALL Transfer events.`);
-        console.log(`2. When a Transfer happens, Somnia will call your contract.`);
-        console.log(`3. No terminal listener needed!`);
-
     } catch (e) {
         console.error("❌ Subscription Failed:", e);
     }
