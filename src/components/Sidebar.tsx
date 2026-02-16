@@ -20,7 +20,7 @@ export function Sidebar() {
             <div className="p-6 flex items-center space-x-2">
                 <Zap className="w-8 h-8 text-primary animate-pulse-slow" />
                 <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary">
-                    VibeAuto
+                    SMAuto
                 </span>
             </div>
 
